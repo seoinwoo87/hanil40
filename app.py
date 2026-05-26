@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # ==========================================
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1iKcWJJTC_M0CHYdHuRhreljlepWymPY6LLUX7N2sXug/edit?gid=766878989#gid=766878989"
 
-st.set_page_config(page_title="한일고 40기 관리시스템 v4.0", page_icon="🏫", layout="wide")
+st.set_page_config(page_title="한일고 40기 관리시스템 v4.1", page_icon="🏫", layout="wide")
 
 st.markdown("""
     <style>
@@ -16,9 +16,9 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
     .stApp { background-color: #f8fafc; }
 
-    /* 중앙 800px 레이아웃 고정 */
+    /* 화면 중앙 750px로 더 타이트하게 고정 */
     .main .block-container {
-        max-width: 800px;
+        max-width: 750px;
         padding-top: 2rem;
         margin: 0 auto;
     }
@@ -27,7 +27,6 @@ st.markdown("""
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         color: #f8fafc; padding: 40px 20px; border-radius: 20px;
         text-align: center; margin-bottom: 30px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
     .banner-main { font-size: 2.1rem; font-weight: 800; color: #deff9a; }
     
@@ -42,8 +41,11 @@ st.markdown("""
         border-radius: 0 8px 8px 0;
     }
     
-    /* 데이터프레임 내부 정렬 보조 CSS */
-    div[data-testid="stDataFrame"] td { text-align: center !important; }
+    /* 표 헤더 및 내용 정렬 보정 */
+    div[data-testid="stDataFrame"] {
+        display: flex;
+        justify-content: center;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -56,7 +58,7 @@ def clean_data(df):
             df[col] = df[col].replace('nan', '')
     return df
 
-# 날짜 계산
+# 날짜 계산 (금주/차주 자동 판단)
 now = datetime.now()
 this_monday = now - timedelta(days=now.weekday())
 deadline = this_monday.replace(hour=8, minute=0, second=0, microsecond=0)
@@ -67,7 +69,7 @@ else:
 target_sun = target_sat + timedelta(days=1)
 target_weekend_str = f"{target_sat.strftime('%m/%d')}(토) ~ {target_sun.strftime('%m/%d')}(일)"
 
-# --- 상단 배너 ---
+# --- 배너 ---
 st.markdown(f"""
     <div class="main-banner">
         <div style="opacity: 0.7; letter-spacing: 2px; margin-bottom: 10px; font-size: 0.9rem;">HANIL HIGH SCHOOL GRADE 40</div>
@@ -78,7 +80,7 @@ st.markdown(f"""
 tab1, tab2 = st.tabs(["📝 학생 신청", "👨‍🏫 교사용 관리"])
 
 # ==========================================
-# [TAB 1] 학생 신청
+# [TAB 1] 학생 신청 (중복 방지 로직 포함)
 # ==========================================
 with tab1:
     with st.form("unified_form"):
@@ -100,10 +102,14 @@ with tab1:
 
                 if not student.empty:
                     s_name = student.iloc[0]['이름']
+                    # 데이터 불러오기 및 중복 체크
                     data_df = clean_data(conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl=0).dropna(how="all"))
                     
-                    if not data_df[(data_df['학번'] == input_sid.strip()) & (data_df['대상주말'] == target_weekend_str)].empty:
-                        st.warning("⚠️ 이미 이번 주의 신청 내역이 있습니다.")
+                    # [중복 방지 핵심 로직]
+                    is_duplicate = not data_df[(data_df['학번'] == input_sid.strip()) & (data_df['대상주말'] == target_weekend_str)].empty
+                    
+                    if is_duplicate:
+                        st.warning(f"⚠️ {s_name} 학생은 이미 {target_weekend_str} 신청 내역이 존재합니다.")
                     else:
                         final_reason = f"[{detailed_time}] {base_reason}" if stime == "기타" else base_reason
                         new_row = pd.DataFrame([{
@@ -123,7 +129,7 @@ with tab1:
                 st.error(f"오류: {e}")
 
 # ==========================================
-# [TAB 2] 교사용 (통계 가독성 극대화)
+# [TAB 2] 교사용 (시인성 최적화)
 # ==========================================
 with tab2:
     admin_pw = st.text_input("교사용 암호", type="password")
@@ -138,7 +144,7 @@ with tab2:
             c2.metric("귀성", f"{len(week_df[week_df['구분']=='귀성'])}명")
             c3.metric("외출", f"{len(week_df[week_df['구분']=='외출'])}명")
 
-            # 통계 생성용 헬퍼 함수
+            # 통계 헬퍼 함수
             def make_clean_stat(df, index_name):
                 if df.empty: return pd.DataFrame()
                 stat = df.groupby([index_name, '구분']).size().unstack(fill_value=0)
@@ -147,33 +153,31 @@ with tab2:
                 stat['합계'] = stat["귀성"] + stat["외출"]
                 return stat[["귀성", "외출", "합계"]]
 
-            # 공통 컬럼 설정 (가운데 정렬)
+            # 표 설정 (슬림한 너비와 중앙 정렬)
             column_config = {
-                "귀성": st.column_config.NumberColumn("귀성", format="%d명", width="medium"),
-                "외출": st.column_config.NumberColumn("외출", format="%d명", width="medium"),
-                "합계": st.column_config.NumberColumn("합계", format="%d명", width="medium"),
+                "귀성": st.column_config.NumberColumn("귀성", format="%d", width="small"),
+                "외출": st.column_config.NumberColumn("외출", format="%d", width="small"),
+                "합계": st.column_config.NumberColumn("합계", format="%d", width="small"),
             }
 
             # 1. 학급별 통계
-            st.markdown('<div class="section-header">🏫 학급별 신청 인원 (가운데 정렬)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">🏫 학급별 현황</div>', unsafe_allow_html=True)
             class_df = make_clean_stat(week_df, '반')
             if not class_df.empty:
-                st.dataframe(class_df, use_container_width=True, column_config=column_config)
-            else:
-                st.info("이번 주 신청 데이터가 없습니다.")
+                st.dataframe(class_df, width=400, column_config=column_config) # 표 너비 제한하여 가운데 밀집
 
             # 2. 호실별 통계
-            st.markdown('<div class="section-header">🏢 호실별 신청 인원 (가운데 정렬)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">🏢 호실별 현황</div>', unsafe_allow_html=True)
             room_df = make_clean_stat(week_df, '호실')
             if not room_df.empty:
-                st.dataframe(room_df, use_container_width=True, column_config=column_config)
+                st.dataframe(room_df, width=400, column_config=column_config)
 
             # 3. 전체 명단
-            st.markdown('<div class="section-header">📋 금주 전체 신청 명단</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">📋 금주 전체 명단</div>', unsafe_allow_html=True)
             st.dataframe(week_df.sort_values(['반', '학번']), use_container_width=True, hide_index=True)
             
             csv = week_df.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📂 전체 명단 다운로드(CSV)", csv, f"40기_신청명단_{target_weekend_str}.csv")
+            st.download_button("📂 CSV 다운로드", csv, f"40기_신청명단_{target_weekend_str}.csv")
 
         except Exception as e:
-            st.error(f"데이터 로드 중 오류가 발생했습니다: {e}")
+            st.error(f"데이터 로드 오류: {e}")
