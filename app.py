@@ -3,9 +3,8 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, timedelta
 
-# [중요!] 부장님의 구글 시트 주소를 아래 큰따옴표 안에 꼭 넣어주세요.
-# 예: SHEET_URL = "https://docs.google.com/spreadsheets/d/1abc.../edit#gid=0"
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1iKcWJJTC_M0CHYdHuRhreljlepWymPY6LLUX7N2sXug/edit?gid=766878989#gid=766878989"
+# [필수] 부장님의 구글 시트 주소를 아래에 정확히 넣어주세요.
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1iKcWJJTC_M0CHYdHuRhreljlepWymPY6LLUX7N2sXug/edit#gid=0"
 
 # 1. 페이지 설정 및 커스텀 디자인
 st.set_page_config(page_title="한일고 40기 귀성/외출 신청", page_icon="🏫", layout="centered")
@@ -63,7 +62,7 @@ st.markdown(f"""
 
 st.markdown("""
     <div class="warning-text">
-        ⚠️ [도용 금지] 타인의 정보를 도용하여 신청할 경우 관련 규정에 따라 엄중히 처치합니다. 
+        ⚠️ [도용 금지] 타인의 정보를 도용하여 신청할 경우 관련 규정에 따라 엄중히 처벌받을 수 있습니다. 
         반드시 본인 학번과 성명으로 신청하십시오.
     </div>
     """, unsafe_allow_html=True)
@@ -107,10 +106,11 @@ if st.button("🚀 신청서 제출하기"):
         st.warning("동의 체크박스에 체크해 주셔야 제출이 가능합니다.")
     else:
         try:
-            # [수정 포인트] worksheet 이름을 'data'로 설정 (한일고 인코딩 에러 해결)
-            df = conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl="0")
+            # 1. 기존 데이터 읽기 (ttl=0으로 항상 최신 데이터 유지)
+            df = conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl=0)
             df = df.dropna(how="all")
 
+            # 2. 새 데이터 생성
             new_row = pd.DataFrame([{
                 "신청시간": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "학번": student_id,
@@ -121,14 +121,14 @@ if st.button("🚀 신청서 제출하기"):
                 "대상주말": target_weekend_str
             }])
             
+            # 3. 데이터 병합 및 업데이트
             updated_df = pd.concat([df, new_row], ignore_index=True)
-            # [수정 포인트] 저장할 때도 'data' 워크시트로 저장
             conn.update(spreadsheet=SHEET_URL, worksheet="data", data=updated_df)
             
-            st.success(f"🎉 접수 완료! {name} 학생, 주말 계획이 안전하게 저장되었습니다.")
+            st.success(f"🎉 접수 완료! {name} 학생, 신청 데이터가 안전하게 저장되었습니다.")
             st.balloons()
         except Exception as e:
-            st.error(f"저장 중 오류 발생! (시트 이름이 'data'인지 확인하세요): {e}")
+            st.error(f"저장 중 오류 발생! 시트 설정(권한, 헤더, 이름)을 확인하세요: {e}")
 
 # --- [관리자 모드] ---
 st.markdown("<br><hr>", unsafe_allow_html=True)
@@ -136,9 +136,8 @@ with st.expander("👨‍🏫 학년부 선생님 전용 관리 모드"):
     admin_pw = st.text_input("관리자 비밀번호", type="password")
     if admin_pw == "hanil40":
         try:
-            # [수정 포인트] 여기서도 'data' 워크시트 참조
-            admin_df = conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl="0")
-            st.write(f"### 📊 전체 신청 현황 (총 {len(admin_df)}건)")
+            admin_df = conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl=0)
+            st.write(f"### 📊 전체 신청 데이터 현황 (총 {len(admin_df)}건)")
             st.dataframe(admin_df, use_container_width=True)
         except Exception as e:
             st.error(f"데이터 로드 실패: {e}")
