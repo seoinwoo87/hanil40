@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 # [중요!] 부장님의 구글 시트 주소를 아래 큰따옴표 안에 꼭 넣어주세요.
 # 예: SHEET_URL = "https://docs.google.com/spreadsheets/d/1abc.../edit#gid=0"
-SHEET_URL = "https://docs.google.com/spreadsheets/d/부장님의_시트_ID/edit#gid=0"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1iKcWJJTC_M0CHYdHuRhreljlepWymPY6LLUX7N2sXug/edit?gid=766878989#gid=766878989"
 
 # 1. 페이지 설정 및 커스텀 디자인
 st.set_page_config(page_title="한일고 40기 귀성/외출 신청", page_icon="🏫", layout="centered")
