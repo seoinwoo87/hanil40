@@ -44,7 +44,8 @@ with tab1:
         try:
             # [핵심] 마스터 데이터 읽기
             master_df = conn.read(spreadsheet=SHEET_URL, worksheet="99_학생_마스터", ttl=0)
-            student_info = master_df[master_df['학번'].astype(str) == sid]
+            master_df['학번'] = master_df['학번'].astype(str).str.strip()
+            student_info = master_df[master_df['학번'] == sid.strip()]
             
             if not student_info.empty:
                 name = student_info.iloc[0]['이름']
