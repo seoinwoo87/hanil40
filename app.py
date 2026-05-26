@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # [필수] 구글 시트 주소 (data 탭 주소)
-SHEET_URL = "https://docs.google.com/spreadsheets/d/부장님_시트_ID/edit#gid=데이터탭_번호"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1iKcWJJTC_M0CHYdHuRhreljlepWymPY6LLUX7N2sXug/edit?gid=766878989#gid=766878989"
 
 # 1. 페이지 설정
 st.set_page_config(page_title="한일고 40기 귀성/외출 신청", page_icon="🏫", layout="centered")
