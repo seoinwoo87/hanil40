@@ -3,7 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, timedelta
 
-# [필수] 부장님의 구글 시트 주소를 아래에 정확히 넣어주세요.
+# [필수] 구글 시트에서 'data' 탭을 누른 상태의 전체 주소(맨 뒤 #gid=숫자 포함)를 꼭 넣어주세요!
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1iKcWJJTC_M0CHYdHuRhreljlepWymPY6LLUX7N2sXug/edit?gid=766878989#gid=766878989"
 
 # 1. 페이지 설정 및 커스텀 디자인
@@ -88,7 +88,8 @@ with col3:
     if selected_time == "기타":
         final_time = st.text_input("상세 시간 직접 입력", placeholder="예: 토요일 19시")
 with col4:
-    reason = st.text_input("사유 및 목적지", placeholder="예: 공주터미널, 병원 등")
+    # [수정] 사유창 플레이스홀더에 필수 입력 안내 강화
+    reason = st.text_input("사유 및 목적지 (필수)", placeholder="예: 공주터미널 이동 후 천안 안과 진료 (5자 이상)")
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("##### ✍️ 최종 확인")
@@ -102,14 +103,21 @@ if st.button("🚀 신청서 제출하기"):
         st.error("성명을 입력해 주세요.")
     elif selected_time == "기타" and not final_time:
         st.error("기타 시간을 구체적으로 작성해 주세요.")
+    # [핵심 수정] 사유 필동 검증 로직 추가 (빈칸이거나 5자 미만인 경우 차단)
+    elif not reason or len(reason.strip()) < 5:
+        st.error("📋 사유 및 목적지를 5글자 이상 구체적으로 적어주셔야 신청이 가능합니다. (예: 병원 진료, 학원 수강 등)")
+    elif reason.strip() in ["없음", "외출", "귀성", "개인사정"]:
+        st.error("⚠️ '없음', '개인사정' 같은 모호한 사유는 접수할 수 없습니다. 구체적으로 적어주세요.")
     elif not confirm_check:
         st.warning("동의 체크박스에 체크해 주셔야 제출이 가능합니다.")
     else:
         try:
-            # 1. 기존 데이터 읽기 (ttl=0으로 항상 최신 데이터 유지)
+            st.info("데이터를 안전하게 저장하는 중입니다...")
+            
+            # 1. 기존 데이터 읽기
             df = conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl=0)
-            df = df.dropna(how="all")
-
+            df = df.dropna(how="all") 
+            
             # 2. 새 데이터 생성
             new_row = pd.DataFrame([{
                 "신청시간": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -117,18 +125,24 @@ if st.button("🚀 신청서 제출하기"):
                 "이름": name,
                 "구분": category,
                 "귀가/외출 일시": final_time,
-                "사유": reason if reason else "없음",
+                "사유": reason.strip(),
                 "대상주말": target_weekend_str
             }])
             
-            # 3. 데이터 병합 및 업데이트
+            # 3. 데이터 병합
             updated_df = pd.concat([df, new_row], ignore_index=True)
+            
+            # 구글 시트 400 에러 방지를 위한 텍스트 강제 변환 처리
+            updated_df = updated_df.fillna("") 
+            updated_df = updated_df.astype(str)
+            
+            # 4. 시트에 업데이트
             conn.update(spreadsheet=SHEET_URL, worksheet="data", data=updated_df)
             
             st.success(f"🎉 접수 완료! {name} 학생, 신청 데이터가 안전하게 저장되었습니다.")
             st.balloons()
         except Exception as e:
-            st.error(f"저장 중 오류 발생! 시트 설정(권한, 헤더, 이름)을 확인하세요: {e}")
+            st.error(f"데이터 저장 실패 (구글시트 400 관련 오류): {e}")
 
 # --- [관리자 모드] ---
 st.markdown("<br><hr>", unsafe_allow_html=True)
