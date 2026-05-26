@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
 
-# [필수] 구글 시트 주소
+# [필수] 구글 시트 주소 (부장님 시트 주소로 꼭 확인해 주세요)
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1iKcWJJTC_M0CHYdHuRhreljlepWymPY6LLUX7N2sXug/edit?gid=766878989#gid=766878989"
 
 # 1. 페이지 설정
@@ -41,8 +41,8 @@ with tab1:
         submit_btn = st.form_submit_button("정보 확인 및 신청 계속하기")
 
     if sid:
-        # [핵심] 마스터 데이터 읽기
         try:
+            # [핵심] 마스터 데이터 읽기
             master_df = conn.read(spreadsheet=SHEET_URL, worksheet="99_학생_마스터", ttl=0)
             student_info = master_df[master_df['학번'].astype(str) == sid]
             
@@ -65,7 +65,7 @@ with tab1:
                     if len(reason) < 5:
                         st.error("사유를 구체적으로 적어주세요.")
                     else:
-                        # 1. 기존 누적 데이터(data) 업데이트
+                        # 데이터 읽기
                         data_df = conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl=0).dropna(how="all")
                         
                         # 중복 체크
@@ -82,7 +82,7 @@ with tab1:
                             updated_data = pd.concat([data_df, new_row], ignore_index=True).fillna("").astype(str)
                             conn.update(spreadsheet=SHEET_URL, worksheet="data", data=updated_data)
                             
-                            # (2) 이번주_명단 탭 업데이트 (해당 주말 데이터만 필터링해서 덮어쓰기)
+                            # (2) 이번주_명단 탭 업데이트
                             this_week_full = updated_data[updated_data['대상주말'] == target_weekend_str]
                             conn.update(spreadsheet=SHEET_URL, worksheet="이번주_명단", data=this_week_full)
                             
@@ -102,26 +102,23 @@ with tab2:
     st.subheader("👨‍🏫 학년부 관리 도구")
     admin_pw = st.text_input("관리자 비번", type="password")
     if admin_pw == "hanil40":
-        # 현재 이번주 명단 바로 보기
-        week_df = conn.read(spreadsheet=SHEET_URL, worksheet="이번주_명단", ttl=0)
-        st.write(f"### 📊 이번 주 신청 현황 ({target_weekend_str})")
-        
-        if not week_df.empty:
-            # 통계 그래프
-            fig = px.bar(week_df.groupby('구분').size().reset_index(name='인원'), x='구분', y='인원', color='구분')
-            st.plotly_chart(fig)
+        try:
+            week_df = conn.read(spreadsheet=SHEET_URL, worksheet="이번주_명단", ttl=0)
+            st.write(f"### 📊 이번 주 신청 현황 ({target_weekend_str})")
             
-            # 검색 및 필터
-            search = st.text_input("학생 검색 (이름/반/호실)")
-            if search:
-                week_df = week_df[week_df.astype(str).apply(lambda x: x.str.contains(search)).any(axis=1)]
-            
-            st.dataframe(week_df, use_container_width=True)
-            
-            # 다운로드
-            csv = week_df.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📂 이번 주 명단 다운로드", csv, f"명단_{target_weekend_str}.csv")
-
-부장님, 이 코드가 적용되면 이제 학생이 학번만 쳐도 부장님이 원하시던 **반/번호/기숙사 호실**이 자동으로 따라붙고, 구글 시트의 **모든 탭(`data`, `이번주_명단`, `통계_현황`)이 동시에 숨 쉬듯 업데이트**될 것입니다.
-
-운영해 보시고 보고서 양식에 더 필요한 열이 있다면 언제든 말씀해 주세요!_
+            if not week_df.empty:
+                # 통계 그래프
+                fig = px.bar(week_df.groupby('구분').size().reset_index(name='인원'), x='구분', y='인원', color='구분')
+                st.plotly_chart(fig)
+                
+                # 검색 및 필터
+                search = st.text_input("학생 검색 (이름/반/호실)")
+                if search:
+                    week_df = week_df[week_df.astype(str).apply(lambda x: x.str.contains(search)).any(axis=1)]
+                
+                st.dataframe(week_df, use_container_width=True)
+                
+                csv = week_df.to_csv(index=False).encode('utf-8-sig')
+                st.download_button("📂 이번 주 명단 다운로드", csv, f"명단_{target_weekend_str}.csv")
+        except Exception as e:
+            st.error(f"관리자 데이터 로드 오류: {e}")
