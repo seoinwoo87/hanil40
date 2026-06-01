@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 # ==========================================
 # 1. 필수 설정
 # ==========================================
-SHEET_URL = "https://docs.google.com/spreadsheets/d/부장님_시트_ID/edit#gid=0"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1iKcWJJTC_M0CHYdHuRhreljlepWymPY6LLUX7N2sXug/edit?gid=766878989#gid=766878989"
 
 # 🌟 [수정] 페이지 타이틀에서 '시스템' 제외
 st.set_page_config(page_title="한일고 40기 귀성외출 신청", page_icon="🏫", layout="wide")
