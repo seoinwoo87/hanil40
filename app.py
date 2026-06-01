@@ -209,18 +209,16 @@ with tab2:
 
                 col_left, col_right = st.columns(2)
                 with col_left:
-                    # 🌟 [수정] '(결재 대상)' 문구 제거
                     st.markdown('##### 🏫 학급별 통계')
                     class_stat = make_stat(lw_df, '반')
-                    # 🌟 [수정] 통계 내용 우측 정렬 적용 (text-align: right)
-                    st.dataframe(class_stat.style.set_properties(**{'text-align': 'right'}), column_config=conf)
+                    # 🌟 [수정] 통계 내용 왼쪽 정렬 적용 (text-align: left)
+                    st.dataframe(class_stat.style.set_properties(**{'text-align': 'left'}), column_config=conf)
                     
                 with col_right:
-                    # 🌟 [수정] '(결재 대상)' 문구 제거
                     st.markdown('##### 🏢 호실별 통계')
                     room_stat = make_stat(lw_df, '호실')
-                    # 🌟 [수정] 통계 내용 우측 정렬 적용 (text-align: right)
-                    st.dataframe(room_stat.style.set_properties(**{'text-align': 'right'}), column_config=conf)
+                    # 🌟 [수정] 통계 내용 왼쪽 정렬 적용 (text-align: left)
+                    st.dataframe(room_stat.style.set_properties(**{'text-align': 'left'}), column_config=conf)
 
                 st.markdown('##### 📋 지난주 최종 신청 명단 표')
                 st.dataframe(lw_df.sort_values(['반', '학번']), use_container_width=True, hide_index=True)
