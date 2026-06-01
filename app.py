@@ -1,166 +1,243 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, timedelta
-import os
 
-# ================= [한일고 40기 자동 날짜 시스템] =================
+# ==========================================
+# 1. 필수 설정
+# ==========================================
+SHEET_URL = "https://docs.google.com/spreadsheets/d/부장님_시트_ID/edit#gid=0"
+
+# 🌟 [수정] 페이지 타이틀에서 '시스템' 제외
+st.set_page_config(page_title="한일고 40기 귀성외출 신청", page_icon="🏫", layout="wide")
+
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght=500;700;900&display=swap');
+    
+    html, body, [class*="css"] { 
+        font-family: 'Noto Sans KR', sans-serif; 
+        font-weight: 700 !important;
+        color: #0f172a;
+    }
+    .stApp { background-color: #f8fafc; }
+
+    .main .block-container {
+        max-width: 750px;
+        padding-top: 2rem;
+        margin: 0 auto;
+    }
+
+    .main-banner {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #ffffff; padding: 45px 20px; border-radius: 20px;
+        text-align: center; margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    .banner-sub { font-size: 1.6rem; font-weight: 900; color: #cbd5e1; margin-bottom: 12px; letter-spacing: 1px; }
+    .banner-main { font-size: 2.5rem; font-weight: 900; color: #deff9a; }
+    
+    .section-header {
+        background-color: #e2e8f0;
+        border-left: 8px solid #0f172a;
+        padding: 12px 18px;
+        font-weight: 900;
+        font-size: 1.2rem;
+        margin: 30px 0 15px 0;
+        border-radius: 0 10px 10px 0;
+    }
+
+    .warning-text {
+        color: #e11d48;
+        font-size: 0.95rem;
+        font-weight: 800;
+        margin-top: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+def clean_data(df):
+    for col in ['학번', '반', '호실', '기숙사 호실']:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            df[col] = df[col].replace('nan', '')
+    return df
+
+# ==========================================
+# 🌟 [수정] 한일고 40기 맞춤형 날짜 이원화 계산 시스템
+# ==========================================
 today = datetime.now()
 current_weekday = today.weekday() # 월:0, 화:1, 수:2, 목:3, 금:4, 토:5, 일:6
 
-# 1. 학생용: 토/일요일 신청 차단 조건 (월~금만 오픈)
-is_open = current_weekday < 5 
+is_open = current_weekday < 5 # 월~금요일만 오픈 (토요일 00시 자동 마감)
 
-# 2. 학생용 다음 주 주말 날짜 자동 계산
-days_until_next_sat = (5 - current_weekday) + 7
-days_until_next_sun = (6 - current_weekday) + 7
-target_saturday = today + timedelta(days=days_until_next_sat)
-target_sunday = today + timedelta(days=days_until_next_sun)
-student_week_title = f"{target_saturday.strftime('%m/%d')} ~ {target_sunday.strftime('%m/%d')}"
-sat_str = target_saturday.strftime("%m월 %d일(토)")
-sun_str = target_sunday.strftime("%m월 %d일(일)")
+# [학생용] 다음 주 주말 날짜 계산
+days_to_next_sat = (5 - current_weekday) + 7
+student_sat = today + timedelta(days=days_to_next_sat)
+student_sun = student_sat + timedelta(days=1)
+student_weekend_str = f"{student_sat.strftime('%m/%d')}(토) ~ {student_sun.strftime('%m/%d')}(일)"
 
-# 3. 선생님용 이번 주 처리 대상 주말 날짜 계산
-days_until_this_sat = 5 - current_weekday
-days_until_this_sun = 6 - current_weekday
-this_saturday = today + timedelta(days=days_until_this_sat)
-this_sunday = today + timedelta(days=days_until_this_sun)
-teacher_week_title = f"{this_saturday.strftime('%m/%d')} ~ {this_sunday.strftime('%m/%d')}"
-# =============================================================================
+# [교사용] 이번 주 처리(결재) 대상 주말 날짜 계산 (지난주 신청분)
+days_to_this_sat = 5 - current_weekday
+teacher_sat = today + timedelta(days=days_to_this_sat)
+teacher_sun = teacher_sat + timedelta(days=1)
+teacher_weekend_str = f"{teacher_sat.strftime('%m/%d')}(토) ~ {teacher_sun.strftime('%m/%d')}(일)"
 
-# 데이터 저장용 CSV 파일 설정
-DATA_FILE = "weekend_requests.csv"
+# --- 상단 배너 (부장님 요청대로 명칭 변경 및 날짜만 크게 배치) ---
+st.markdown(f"""
+    <div class="main-banner">
+        <div class="banner-sub">한일고 40기 귀성외출 신청</div>
+        <div class="banner-main">📅 {student_weekend_str}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# 기존 저장 파일과의 안정적인 연동을 위해 내부 컬럼명은 유지하되 UI는 모두 '기간'으로 표시합니다.
-if not os.path.exists(DATA_FILE):
-    df = pd.DataFrame(columns=["조사주차", "신청시간", "반", "번호", "이름", "구분", "사유", "귀가/외출 일시"])
-    df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
+tab1, tab2 = st.tabs(["📝 학생 신청", "👨‍🏫 교사용 관리"])
 
-# 상단 타이틀 한일고 40기 지정
-st.set_page_config(page_title="한일고 40기 귀성외출 신청 시스템", page_icon="🏫")
-st.title("🏫 한일고 40기 귀성·외출 신청 시스템")
-st.markdown("---")
-
-tab1, tab2 = st.tabs(["📋 학생 신청하기", "👨‍🏫 선생님 관리 모드"])
-
-# ------------------ [📋 학생 신청 탭] ------------------
+# ==========================================
+# [TAB 1] 학생 신청
+# ==========================================
 with tab1:
-    # 🌟 1. 아이들을 위한 깔끔한 공지/경고 박스 복원
-    st.warning("⚠️ **필독 공지**: 주말 귀성 및 외출 신청은 **월요일부터 금요일까지만** 가능합니다. 토요일 00시 이후에는 시스템이 자동으로 마감되니 반드시 마감 전에 신청해 주세요.")
+    # 🌟 [수정] 기존의 깔끔한 경고 문구를 상단에 배치
+    st.markdown('<p class="warning-text">⚠️ 주의: 주말 귀성 및 외출 신청은 월요일부터 금요일까지만 가능합니다. 토요일 00시 이후에는 시스템이 자동으로 마감됩니다.</p>', unsafe_allow_html=True)
     
     if is_open:
-        # 날짜만 크게 노출
-        st.header(f"📅 {sat_str} ~ {sun_str}")
-        st.caption("정확하게 입력 후 '신청하기' 버튼을 눌러주세요.")
+        st.markdown('<div class="section-header">본인 확인 및 내용 작성</div>', unsafe_allow_html=True)
         
-        with st.form(key="request_form", clear_on_submit=True):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                class_num = st.selectbox("반", [f"{i}반" for i in range(1, 11)])
-            with col2:
-                student_num = st.number_input("번호", min_value=1, max_value=40, step=1)
-            with col3:
-                name = st.text_input("이름")
-                
-            # 🌟 2. 구분 변경: 토요귀성, 토요 외출, 일요 외출, 기타 (잔류 삭제)
-            category = st.radio("구분", ["토요귀성", "토요 외출", "일요 외출", "기타"])
-            
-            date_time = st.text_input("귀가/외출 일시", placeholder=f"예시: {sat_str} 오전 10시 나감 / 저녁 6시 복귀")
-            
-            # 🌟 3. '기타' 선택 시에만 동적으로 상세 기록을 요구하는 서식 노출
-            if category == "기타":
-                etc_reason = st.text_area("기타 일정 상세 입력 (언제 나가는지 명확히 기록하세요)", 
-                                          placeholder="예시: 금요일 조기 귀성 등 구체적인 요일과 일시, 사유를 함께 작성해 주세요.")
-                reason = etc_reason
-            else:
-                reason = st.text_area("사유 (외출 시 필수 입력)")
-            
-            submit_button = st.form_submit_button(label="🚀 신청하기")
-            
-            if submit_button:
-                if not name:
-                    st.error("이름을 입력해주세요!")
-                elif category == "기타" and not reason:
-                    st.error("기타 상세 일정을 입력해주세요!")
-                else:
-                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    new_data = pd.DataFrame([{
-                        "조사주차": student_week_title,
-                        "신청시간": current_time,
-                        "반": class_num,
-                        "번호": f"{student_num}번",
-                        "이름": name,
-                        "구분": category,
-                        "사유": reason if reason else "없음",
-                        "귀가/외출 일시": date_time
-                    }])
-                    
-                    df_existing = pd.read_csv(DATA_FILE, encoding="utf-8-sig")
-                    df_updated = pd.concat([df_existing, new_data], ignore_index=True)
-                    df_updated.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
-                    
-                    st.success(f"🎉 {class_num} {student_num}번 {name} 학생의 신청이 완료되었습니다!")
-    else:
-        st.header("주말 귀성 및 외출 신청")
-        st.write("❌ **지금은 신청 기간이 아닙니다.**")
-        st.caption("주말 귀성 및 외출 신청은 월요일부터 금요일까지만 가능합니다. 토/일요일은 시스템이 마감됩니다.")
+        # 학번 입력
+        input_sid = st.text_input("학번 4자리 (예: 1101)")
+        
+        # 🌟 [수정] 구분 통합 및 변경: 토요귀성, 토요 외출, 일요 외출, 기타 (잔류 제외)
+        cat = st.radio("구분", ["토요귀성", "토요 외출", "일요 외출", "기타"], horizontal=True)
+        
+        # 🌟 [수정] '기타' 선택 시에만 주관식 상세 입력창 표시
+        detailed_time = ""
+        if cat == "기타":
+            detailed_time = st.text_input("📍 상세 일정을 직접 입력하세요 (예: 금요일 조기 귀성 등)")
+        
+        base_reason = st.text_input("구체적 사유 (목적지 포함 5자 이상)")
 
-# ------------------ [👨‍🏫 선생님 관리 탭] ------------------
+        st.markdown("---")
+        
+        confirm_check = st.checkbox("위 신청 내용이 본인의 것이며 사실임을 확인합니다.")
+        submit_btn = st.button("🚀 신청서 최종 제출하기", disabled=not confirm_check)
+
+        if submit_btn:
+            if not input_sid or len(base_reason) < 5:
+                st.error("학번과 사유를 정확히 입력해주세요.")
+            elif cat == "기타" and not detailed_time:
+                st.error("기타 선택 시 상세 일정을 필수 입력해야 합니다.")
+            else:
+                try:
+                    # 학생 마스터 시트 로드
+                    master_df = clean_data(conn.read(spreadsheet=SHEET_URL, worksheet="99_학생_마스터", ttl=0))
+                    student = master_df[master_df['학번'] == input_sid.strip()]
+
+                    if not student.empty:
+                        s_name = student.iloc[0]['이름']
+                        # 🌟 [수정] 마스터 시트에서 호실(또는 기숙사 호실) 자동 추출
+                        s_room = student.iloc[0].get('호실', student.iloc[0].get('기숙사 호실', '-'))
+                        s_class = student.iloc[0].get('반', "-")
+                        
+                        data_df = clean_data(conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl=0).dropna(how="all"))
+                        
+                        # 중복 체크
+                        if not data_df[(data_df['학번'] == input_sid.strip()) & (data_df['대상주말'] == student_weekend_str)].empty:
+                            st.warning(f"⚠️ {s_name} 학생은 이미 이번 기간 신청 내역이 존재합니다.")
+                        else:
+                            final_reason = f"[{detailed_time}] {base_reason}" if cat == "기타" else base_reason
+                            
+                            # 새 행 데이터 생성 (호실 데이터 포함)
+                            new_row = pd.DataFrame([{
+                                "신청시간": datetime.now().strftime("%m-%d %H:%M"),
+                                "학번": input_sid.strip(), 
+                                "이름": s_name, 
+                                "반": s_class, 
+                                "호실": s_room, 
+                                "구분": cat, 
+                                "귀가/외출 일시": detailed_time if cat == "기타" else cat, 
+                                "사유": final_reason, 
+                                "대상주말": student_weekend_str
+                            }])
+                            
+                            updated_all = pd.concat([data_df, new_row], ignore_index=True).astype(str)
+                            conn.update(spreadsheet=SHEET_URL, worksheet="data", data=updated_all)
+                            conn.update(spreadsheet=SHEET_URL, worksheet="이번주_명단", data=updated_all[updated_all['대상주말'] == student_weekend_str])
+                            st.balloons()
+                            # 🌟 [수정] 성공 메시지에 기숙사 호실 노출되도록 반영
+                            st.success(f"✅ [{s_room} {s_name}] 학생, 신청이 완료되었습니다! (호실 자동 매핑 완료)")
+                    else:
+                        st.error("❌ 등록되지 않은 학번입니다. 본인의 학번을 확인하세요.")
+                except Exception as e:
+                    st.error(f"오류: {e}")
+    else:
+        st.markdown('<div class="section-header">📋 신청 마감 안내</div>', unsafe_allow_html=True)
+        st.error("❌ **지금은 신청 기간이 아닙니다.**")
+        st.info("주말 귀성 및 외출 신청은 평일(월~금)에만 가능합니다. 토/일요일은 다음 주 조사를 위해 시스템이 마감됩니다.")
+
+# ==========================================
+# [TAB 2] 교사용 관리
+# ==========================================
 with tab2:
-    st.header("👨‍🏫 명단 확인 및 관리")
-    password = st.text_input("관리자 비밀번호를 입력하세요", type="password")
-    
-    if password == "1234":
-        st.success("인증되었습니다.")
-        
-        df_display = pd.read_csv(DATA_FILE, encoding="utf-8-sig")
-        
-        all_weeks = df_display["조사주차"].unique().tolist() if not df_display.empty else []
-        if teacher_week_title not in all_weeks:
-            all_weeks.append(teacher_week_title)
-        if student_week_title not in all_weeks:
-            all_weeks.append(student_week_title)
+    admin_pw = st.text_input("교사용 비밀번호", type="password")
+    if admin_pw == "hanil40":
+        try:
+            full_data = clean_data(conn.read(spreadsheet=SHEET_URL, worksheet="data", ttl=0))
             
-        all_weeks.sort()
-        default_idx = all_weeks.index(teacher_week_title)
-        
-        # 🌟 4. '주차' 단어를 지우고 '기간'으로 통일
-        st.info(f"📅 **이번 주 처리(결재) 대상 기간:** `{teacher_week_title}` (지난주에 학생들이 신청한 내역입니다.)")
-        
-        # 🌟 5. 실시간 이번 주 신청 현황판 추가 (아이들이 지금 누르고 있는 상태)
-        st.markdown("---")
-        st.subheader(f"🔄 실시간 이번 주 신청 현황 (대상 기간: {student_week_title})")
-        st.caption("학생들이 다음 주말을 위해 현재 실시간으로 신청하고 있는 데이터입니다.")
-        
-        df_current_realtime = df_display[df_display["조사주차"] == student_week_title] if not df_display.empty else pd.DataFrame()
-        if not df_current_realtime.empty:
-            st.dataframe(df_current_realtime)
-        else:
-            st.write("이번 주 신청 내역이 아직 없습니다.")
-        
-        # 6. 과거 기록 및 상세 조회 영역
-        st.markdown("---")
-        st.subheader("🗂️ 과거 기록 및 기간별 조회")
-        selected_week = st.selectbox("신청 기간 선택", all_weeks, index=default_idx)
-        
-        # 지난 코드 오타(조as주차) 수정 완료
-        df_week_filtered = df_display[df_display["조사주차"] == selected_week] if not df_display.empty else df_display
-        
-        filter_class = st.selectbox("반별 필터", ["전체보기"] + [f"{i}반" for i in range(1, 11)])
-        if filter_class != "전체보기":
-            df_filtered = df_week_filtered[df_week_filtered["반"] == filter_class]
-        else:
-            df_filtered = df_week_filtered
+            # 🌟 1. [수정] 이번 주 실시간 신청 현황 및 통계 노출 (단어에서 '주차' 전면 제거)
+            st.markdown(f"### 🔄 이번 주 실시간 신청 현황 및 통계 (신청 기간: {student_weekend_str})")
+            rt_df = full_data[full_data['대상주말'] == student_weekend_str]
             
-        st.write(f"📊 **{selected_week} 기간 신청 명단 (총 {len(df_filtered)}명)**")
-        st.dataframe(df_filtered)
-        
-        csv_data = df_filtered.to_csv(index=False, encoding="utf-8-sig").encode('utf-8-sig')
-        st.download_button(
-            label="📥 선택한 기간 명단 엑셀(CSV) 다운로드",
-            data=csv_data,
-            file_name=f"귀성외출명단_{selected_week.replace(' / ', '_')}.csv",
-            mime="text/csv"
-        )
+            # 실시간 카운터 계기판 생성
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("총 신청", f"{len(rt_df)}명")
+            c2.metric("토요귀성", f"{len(rt_df[rt_df['구분']=='토요귀성'])}명")
+            c3.metric("토요 외출", f"{len(rt_df[rt_df['구분']=='토요 외출'])}명")
+            c4.metric("일요 외출", f"{len(rt_df[rt_df['구분']=='일요 외출'])}명")
+            c5.metric("기타", f"{len(rt_df[rt_df['구분']=='기타'])}명")
             
-    elif password:
-        st.error("비밀번호가 틀렸습니다.")
+            st.dataframe(rt_df.sort_values(['반', '학번']), use_container_width=True, hide_index=True)
+            
+            # 🌟 2. [수정] 과거 복잡한 조회 상자 제거 -> 오직 지난주 신청 내역(이번 주 결재 대상)만 고정 노출
+            st.markdown("---")
+            st.markdown(f"### 📥 지난주 신청 내역 (이번 주 결재 처리 대상 기간: {teacher_weekend_str})")
+            lw_df = full_data[full_data['대상주말'] == teacher_weekend_str]
+            
+            if not lw_df.empty:
+                # 기존 학급별/호실별 현황 통계 함수
+                def make_stat(df, idx):
+                    if df.empty: return pd.DataFrame()
+                    s = df.groupby([idx, '구분']).size().unstack(fill_value=0)
+                    for c in ["토요귀성", "토요 외출", "일요 외출", "기타"]:
+                        if c not in s.columns: s[c] = 0
+                    s['합계'] = s.sum(axis=1)
+                    return s[["토요귀성", "토요 외출", "일요 외출", "기타", "합계"]]
+
+                conf = {
+                    "토요귀성": st.column_config.NumberColumn("토요귀성", format="%d", width="small"),
+                    "토요 외출": st.column_config.NumberColumn("토요 외출", format="%d", width="small"),
+                    "일요 외출": st.column_config.NumberColumn("일요 외출", format="%d", width="small"),
+                    "기타": st.column_config.NumberColumn("기타", format="%d", width="small"),
+                    "합계": st.column_config.NumberColumn("합계", format="%d", width="small"),
+                }
+
+                col_left, col_right = st.columns(2)
+                with col_left:
+                    st.markdown('##### 🏫 학급별 통계 (결재 대상)')
+                    st.dataframe(make_stat(lw_df, '반'), column_config=conf)
+                with col_right:
+                    st.markdown('##### 🏢 호실별 통계 (결재 대상)')
+                    st.dataframe(make_stat(lw_df, '호실'), column_config=conf)
+
+                st.markdown('##### 📋 지난주 최종 신청 명단 표')
+                st.dataframe(lw_df.sort_values(['반', '학번']), use_container_width=True, hide_index=True)
+                
+                # 다운로드 기능
+                csv = lw_df.to_csv(index=False).encode('utf-8-sig')
+                st.download_button("📂 지난주 결재 대상 명단 다운로드 (CSV)", csv, f"40기_결재명단_{teacher_weekend_str}.csv")
+            else:
+                st.write("해당 기간에 수집된 결재 대상 데이터가 없습니다.")
+
+        except Exception as e:
+            st.error(f"데이터 로드 실패: {e}")
