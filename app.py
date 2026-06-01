@@ -119,7 +119,7 @@ with tab1:
 
         if submit_btn:
             if not input_sid or len(base_reason) < 5:
-                st.error("학번 and 사유를 정확히 입력해주세요.")
+                st.error("학번과 사유를 정확히 입력해주세요.")
             elif cat == "기타" and not detailed_time:
                 st.error("기타 선택 시 상세 일정을 필수 입력해야 합니다.")
             else:
@@ -186,7 +186,6 @@ with tab2:
             
             st.dataframe(rt_df.sort_values(['반', '학번']), use_container_width=True, hide_index=True)
             
-            # 🌟 [수정] 부장님 요청대로 앞의 긴 수식어 지우고 깔끔하게 날짜만 남김
             st.markdown("---")
             st.markdown(f"### 📥 지난주 신청 내역 ({teacher_weekend_str})")
             lw_df = full_data[full_data['대상주말'] == teacher_weekend_str]
@@ -210,16 +209,18 @@ with tab2:
 
                 col_left, col_right = st.columns(2)
                 with col_left:
-                    st.markdown('##### 🏫 학급별 통계 (결재 대상)')
+                    # 🌟 [수정] '(결재 대상)' 문구 제거
+                    st.markdown('##### 🏫 학급별 통계')
                     class_stat = make_stat(lw_df, '반')
-                    # 🌟 [수정] 표 내용 전체 가운데 정렬 적용 (.style.set_properties)
-                    st.dataframe(class_stat.style.set_properties(**{'text-align': 'center'}), column_config=conf)
+                    # 🌟 [수정] 통계 내용 우측 정렬 적용 (text-align: right)
+                    st.dataframe(class_stat.style.set_properties(**{'text-align': 'right'}), column_config=conf)
                     
                 with col_right:
-                    st.markdown('##### 🏢 호실별 통계 (결재 대상)')
+                    # 🌟 [수정] '(결재 대상)' 문구 제거
+                    st.markdown('##### 🏢 호실별 통계')
                     room_stat = make_stat(lw_df, '호실')
-                    # 🌟 [수정] 표 내용 전체 가운데 정렬 적용 (.style.set_properties)
-                    st.dataframe(room_stat.style.set_properties(**{'text-align': 'center'}), column_config=conf)
+                    # 🌟 [수정] 통계 내용 우측 정렬 적용 (text-align: right)
+                    st.dataframe(room_stat.style.set_properties(**{'text-align': 'right'}), column_config=conf)
 
                 st.markdown('##### 📋 지난주 최종 신청 명단 표')
                 st.dataframe(lw_df.sort_values(['반', '학번']), use_container_width=True, hide_index=True)
