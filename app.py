@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-# ================= [학년부장님 맞춤형 자동 날짜 시스템] =================
+# ================= [한일고 40기 자동 날짜 시스템] =================
 today = datetime.now()
 current_weekday = today.weekday() # 월:0, 화:1, 수:2, 목:3, 금:4, 토:5, 일:6
 
@@ -30,11 +30,12 @@ teacher_week_title = f"{this_saturday.strftime('%m/%d')} ~ {this_sunday.strftime
 # 데이터 저장용 CSV 파일 설정
 DATA_FILE = "weekend_requests.csv"
 
+# 기존 저장 파일과의 안정적인 연동을 위해 내부 컬럼명은 유지하되 UI는 모두 '기간'으로 표시합니다.
 if not os.path.exists(DATA_FILE):
     df = pd.DataFrame(columns=["조사주차", "신청시간", "반", "번호", "이름", "구분", "사유", "귀가/외출 일시"])
     df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
 
-# 🌟 1. 상단 타이틀을 한일고 40기 전용으로 변경
+# 상단 타이틀 한일고 40기 지정
 st.set_page_config(page_title="한일고 40기 귀성외출 신청 시스템", page_icon="🏫")
 st.title("🏫 한일고 40기 귀성·외출 신청 시스템")
 st.markdown("---")
@@ -43,8 +44,11 @@ tab1, tab2 = st.tabs(["📋 학생 신청하기", "👨‍🏫 선생님 관리 
 
 # ------------------ [📋 학생 신청 탭] ------------------
 with tab1:
+    # 🌟 1. 아이들을 위한 깔끔한 공지/경고 박스 복원
+    st.warning("⚠️ **필독 공지**: 주말 귀성 및 외출 신청은 **월요일부터 금요일까지만** 가능합니다. 토요일 00시 이후에는 시스템이 자동으로 마감되니 반드시 마감 전에 신청해 주세요.")
+    
     if is_open:
-        # 🌟 2. 수식어 다 빼고 날짜만 크고 깔끔하게 노출!
+        # 날짜만 크게 노출
         st.header(f"📅 {sat_str} ~ {sun_str}")
         st.caption("정확하게 입력 후 '신청하기' 버튼을 눌러주세요.")
         
@@ -57,17 +61,26 @@ with tab1:
             with col3:
                 name = st.text_input("이름")
                 
-            # 🌟 3. '잔류'를 제외하고 기존 구분을 명확히 지정
-            category = st.radio("구분", ["토요귀성", "외출(당일 복귀)"])
+            # 🌟 2. 구분 변경: 토요귀성, 토요 외출, 일요 외출, 기타 (잔류 삭제)
+            category = st.radio("구분", ["토요귀성", "토요 외출", "일요 외출", "기타"])
             
-            date_time = st.text_input("귀가/외출 일시 예시", placeholder=f"예시: {sat_str} 오전 10시 나감 / 저녁 6시 복귀")
-            reason = st.text_area("사유 (외출 시 필수 입력)")
+            date_time = st.text_input("귀가/외출 일시", placeholder=f"예시: {sat_str} 오전 10시 나감 / 저녁 6시 복귀")
+            
+            # 🌟 3. '기타' 선택 시에만 동적으로 상세 기록을 요구하는 서식 노출
+            if category == "기타":
+                etc_reason = st.text_area("기타 일정 상세 입력 (언제 나가는지 명확히 기록하세요)", 
+                                          placeholder="예시: 금요일 조기 귀성 등 구체적인 요일과 일시, 사유를 함께 작성해 주세요.")
+                reason = etc_reason
+            else:
+                reason = st.text_area("사유 (외출 시 필수 입력)")
             
             submit_button = st.form_submit_button(label="🚀 신청하기")
             
             if submit_button:
                 if not name:
                     st.error("이름을 입력해주세요!")
+                elif category == "기타" and not reason:
+                    st.error("기타 상세 일정을 입력해주세요!")
                 else:
                     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     new_data = pd.DataFrame([{
@@ -104,16 +117,33 @@ with tab2:
         all_weeks = df_display["조사주차"].unique().tolist() if not df_display.empty else []
         if teacher_week_title not in all_weeks:
             all_weeks.append(teacher_week_title)
+        if student_week_title not in all_weeks:
+            all_weeks.append(student_week_title)
             
         all_weeks.sort()
         default_idx = all_weeks.index(teacher_week_title)
         
-        # 🌟 영어 설명서 버그를 일으키던 st.help를 단정하고 깔끔한 st.info로 변경했습니다!
-        st.info(f"📅 **이번 주 처리(결재) 대상 주차:** `{teacher_week_title}` (지난주에 학생들이 신청한 내역입니다.)")
+        # 🌟 4. '주차' 단어를 지우고 '기간'으로 통일
+        st.info(f"📅 **이번 주 처리(결재) 대상 기간:** `{teacher_week_title}` (지난주에 학생들이 신청한 내역입니다.)")
         
-        selected_week = st.selectbox("조사 주차 선택", all_weeks, index=default_idx)
+        # 🌟 5. 실시간 이번 주 신청 현황판 추가 (아이들이 지금 누르고 있는 상태)
+        st.markdown("---")
+        st.subheader(f"🔄 실시간 이번 주 신청 현황 (대상 기간: {student_week_title})")
+        st.caption("학생들이 다음 주말을 위해 현재 실시간으로 신청하고 있는 데이터입니다.")
         
-        df_week_filtered = df_display[df_display["조as주차"] == selected_week] if not df_display.empty else df_display
+        df_current_realtime = df_display[df_display["조사주차"] == student_week_title] if not df_display.empty else pd.DataFrame()
+        if not df_current_realtime.empty:
+            st.dataframe(df_current_realtime)
+        else:
+            st.write("이번 주 신청 내역이 아직 없습니다.")
+        
+        # 6. 과거 기록 및 상세 조회 영역
+        st.markdown("---")
+        st.subheader("🗂️ 과거 기록 및 기간별 조회")
+        selected_week = st.selectbox("신청 기간 선택", all_weeks, index=default_idx)
+        
+        # 지난 코드 오타(조as주차) 수정 완료
+        df_week_filtered = df_display[df_display["조사주차"] == selected_week] if not df_display.empty else df_display
         
         filter_class = st.selectbox("반별 필터", ["전체보기"] + [f"{i}반" for i in range(1, 11)])
         if filter_class != "전체보기":
@@ -121,13 +151,12 @@ with tab2:
         else:
             df_filtered = df_week_filtered
             
-        st.subheader(f"📊 {selected_week} 주차 신청 현황 (총 {len(df_filtered)}명)")
+        st.write(f"📊 **{selected_week} 기간 신청 명단 (총 {len(df_filtered)}명)**")
         st.dataframe(df_filtered)
         
-        st.markdown("---")
         csv_data = df_filtered.to_csv(index=False, encoding="utf-8-sig").encode('utf-8-sig')
         st.download_button(
-            label="📥 선택한 주차 명단 엑셀(CSV) 다운로드",
+            label="📥 선택한 기간 명단 엑셀(CSV) 다운로드",
             data=csv_data,
             file_name=f"귀성외출명단_{selected_week.replace(' / ', '_')}.csv",
             mime="text/csv"
