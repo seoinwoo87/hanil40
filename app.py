@@ -34,9 +34,9 @@ if not os.path.exists(DATA_FILE):
     df = pd.DataFrame(columns=["조사주차", "신청시간", "반", "번호", "이름", "구분", "사유", "귀가/외출 일시"])
     df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
 
-# 웹페이지 기본 설정
-st.set_page_config(page_title="학년 귀성/외출 관리 시스템", page_icon="🏫")
-st.title("🏫 우리 학년 귀성·외출 신청 시스템")
+# 🌟 1. 상단 타이틀을 한일고 40기 전용으로 변경
+st.set_page_config(page_title="한일고 40기 귀성외출 신청 시스템", page_icon="🏫")
+st.title("🏫 한일고 40기 귀성·외출 신청 시스템")
 st.markdown("---")
 
 tab1, tab2 = st.tabs(["📋 학생 신청하기", "👨‍🏫 선생님 관리 모드"])
@@ -44,8 +44,8 @@ tab1, tab2 = st.tabs(["📋 학생 신청하기", "👨‍🏫 선생님 관리 
 # ------------------ [📋 학생 신청 탭] ------------------
 with tab1:
     if is_open:
-        # 🌟 처음처럼 깔끔하게 헤더와 설명글로만 첫 화면 구성! 날짜만 제목에 자연스럽게 녹였습니다.
-        st.header(f"주말 귀성 및 외출 신청 ({sat_str} ~ {sun_str})")
+        # 🌟 2. 수식어 다 빼고 날짜만 크고 깔끔하게 노출!
+        st.header(f"📅 {sat_str} ~ {sun_str}")
         st.caption("정확하게 입력 후 '신청하기' 버튼을 눌러주세요.")
         
         with st.form(key="request_form", clear_on_submit=True):
@@ -57,8 +57,8 @@ with tab1:
             with col3:
                 name = st.text_input("이름")
                 
-            # 🌟 '금요귀성'을 빼고 세 가지만 깔끔하게 배치했습니다.
-            category = st.radio("구분", ["토요귀성", "외출(당일 복귀)", "잔류"])
+            # 🌟 3. '잔류'를 제외하고 기존 구분을 명확히 지정
+            category = st.radio("구분", ["토요귀성", "외출(당일 복귀)"])
             
             date_time = st.text_input("귀가/외출 일시 예시", placeholder=f"예시: {sat_str} 오전 10시 나감 / 저녁 6시 복귀")
             reason = st.text_area("사유 (외출 시 필수 입력)")
@@ -87,7 +87,6 @@ with tab1:
                     
                     st.success(f"🎉 {class_num} {student_num}번 {name} 학생의 신청이 완료되었습니다!")
     else:
-        # 주말 접속 시에도 큰 상자 없이 깔끔하게 텍스트로만 마감 안내
         st.header("주말 귀성 및 외출 신청")
         st.write("❌ **지금은 신청 기간이 아닙니다.**")
         st.caption("주말 귀성 및 외출 신청은 월요일부터 금요일까지만 가능합니다. 토/일요일은 시스템이 마감됩니다.")
@@ -109,11 +108,12 @@ with tab2:
         all_weeks.sort()
         default_idx = all_weeks.index(teacher_week_title)
         
-        st.help(f"📅 **이번 주 처리(결재) 대상 주차:** `{teacher_week_title}` (지난주에 학생들이 신청한 내역입니다.)")
+        # 🌟 영어 설명서 버그를 일으키던 st.help를 단정하고 깔끔한 st.info로 변경했습니다!
+        st.info(f"📅 **이번 주 처리(결재) 대상 주차:** `{teacher_week_title}` (지난주에 학생들이 신청한 내역입니다.)")
         
         selected_week = st.selectbox("조사 주차 선택", all_weeks, index=default_idx)
         
-        df_week_filtered = df_display[df_display["조사주차"] == selected_week] if not df_display.empty else df_display
+        df_week_filtered = df_display[df_display["조as주차"] == selected_week] if not df_display.empty else df_display
         
         filter_class = st.selectbox("반별 필터", ["전체보기"] + [f"{i}반" for i in range(1, 11)])
         if filter_class != "전체보기":
